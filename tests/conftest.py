@@ -77,3 +77,50 @@ def make_bucket(
             BucketLoggingStatus={"LoggingEnabled": {"TargetBucket": log_to, "TargetPrefix": f"{name}/"}},
         )
     return name
+
+
+def make_user(aws, name, console=False, mfa=False, access_key=False):
+    iam = aws.iam
+    iam.create_user(UserName=name)
+    if console:
+        iam.create_login_profile(UserName=name, Password="Correct-Horse-9!")
+    if mfa:
+        serial = iam.create_virtual_mfa_device(VirtualMFADeviceName=name)["VirtualMFADevice"][
+            "SerialNumber"
+        ]
+        iam.enable_mfa_device(
+            UserName=name, SerialNumber=serial, AuthenticationCode1="123456", AuthenticationCode2="654321"
+        )
+    if access_key:
+        return iam.create_access_key(UserName=name)["AccessKey"]["AccessKeyId"]
+    return name
+
+
+def make_policy(aws, name, *statements):
+    return aws.iam.create_policy(
+        PolicyName=name,
+        PolicyDocument=json.dumps({"Version": "2012-10-17", "Statement": list(statements)}),
+    )["Policy"]["Arn"]
+
+
+def fake_root_row(aws, monkeypatch, password_last_used="N/A", key_1="N/A", key_2="N/A", user="<root_account>"):
+    """moto's credential report has no <root_account> row; real AWS always does.
+
+    Append one so IAM.4's parsing and date logic run against the real CSV shape.
+    """
+    real = aws.iam.get_credential_report
+
+    def with_root():
+        content = real()["Content"].decode()
+        header = content.splitlines()[0].split(",")
+        row = dict.fromkeys(header, "N/A")
+        row.update(
+            user=user,
+            password_last_used=password_last_used,
+            access_key_1_last_used_date=key_1,
+            access_key_2_last_used_date=key_2,
+        )
+        content = content.rstrip("\n") + "\n" + ",".join(row[h] for h in header) + "\n"
+        return {"Content": content.encode()}
+
+    monkeypatch.setattr(aws.iam, "get_credential_report", with_root)
