@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# scan output
+findings.json
+report.html
+
+# credentials
+.env
+.aws/
+
+# agents
+.claude/
