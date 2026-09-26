@@ -124,3 +124,30 @@ def fake_root_row(aws, monkeypatch, password_last_used="N/A", key_1="N/A", key_2
         return {"Content": content.encode()}
 
     monkeypatch.setattr(aws.iam, "get_credential_report", with_root)
+
+
+def make_security_group(aws, name, *rules):
+    """Rules are (protocol, from_port, to_port, cidr). A cidr with ':' is IPv6."""
+    group_id = aws.ec2.create_security_group(GroupName=name, Description=name)["GroupId"]
+    if rules:
+        aws.ec2.authorize_security_group_ingress(
+            GroupId=group_id,
+            IpPermissions=[
+                {
+                    "IpProtocol": protocol,
+                    "FromPort": low,
+                    "ToPort": high,
+                    **(
+                        {"Ipv6Ranges": [{"CidrIpv6": cidr}]}
+                        if ":" in cidr
+                        else {"IpRanges": [{"CidrIp": cidr}]}
+                    ),
+                }
+                for protocol, low, high, cidr in rules
+            ],
+        )
+    return group_id
+
+
+def make_volume(aws, encrypted=False):
+    return aws.ec2.create_volume(Size=1, AvailabilityZone=f"{REGION}a", Encrypted=encrypted)["VolumeId"]

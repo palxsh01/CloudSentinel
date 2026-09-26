@@ -14,9 +14,20 @@ from scanner import report, runner
 from scanner.checks import REGISTRY
 from scanner.checks import iam as iam_checks
 from scanner.models import Severity
-from tests.conftest import fake_root_row, make_bucket, make_policy, make_user
+from tests.conftest import (
+    fake_root_row,
+    make_bucket,
+    make_policy,
+    make_security_group,
+    make_user,
+    make_volume,
+)
 
-IMPLEMENTED = {"S3.1", "S3.2", "S3.3", "S3.4", "IAM.1", "IAM.2", "IAM.3", "IAM.4"}
+IMPLEMENTED = {
+    *("S3.1", "S3.2", "S3.3", "S3.4"),
+    *("IAM.1", "IAM.2", "IAM.3", "IAM.4"),
+    *("EC2.1", "EC2.2", "EC2.3"),
+}
 
 
 INSECURE_BUCKET = "cloudsentinel-public-bucket"
@@ -51,7 +62,27 @@ def planted(aws, monkeypatch):
     # IAM.4: root signed in two days before that moved clock.
     fake_root_row(aws, monkeypatch, password_last_used=(later - timedelta(days=2)).isoformat())
 
-    return {INSECURE_BUCKET, INSECURE_USER, stale_key, admin_policy, "<root_account>"}
+    # EC2.1 + EC2.2: one group exposing SSH and MySQL. The hardened twin is
+    # world-open only on HTTPS, with SSH limited to an office range.
+    open_group = make_security_group(
+        aws, "cloudsentinel-open", ("tcp", 22, 22, "0.0.0.0/0"), ("tcp", 3306, 3306, "0.0.0.0/0")
+    )
+    make_security_group(
+        aws, "cloudsentinel-web", ("tcp", 443, 443, "0.0.0.0/0"), ("tcp", 22, 22, "203.0.113.0/24")
+    )
+    # EC2.3
+    plain_volume = make_volume(aws)
+    make_volume(aws, encrypted=True)
+
+    return {
+        INSECURE_BUCKET,
+        INSECURE_USER,
+        stale_key,
+        admin_policy,
+        "<root_account>",
+        f"{open_group} (cloudsentinel-open)",
+        plain_volume,
+    }
 
 
 def test_every_registered_check_is_expected_here():
@@ -76,10 +107,10 @@ def test_findings_sort_highest_severity_first(aws, planted):
 
 
 def test_service_filter_runs_only_that_service(aws, planted):
-    for service in ("s3", "iam"):
+    for service in ("s3", "iam", "ec2"):
         findings, _ = runner.run(aws, service=service)
         assert findings and {f.service for f in findings} == {service}
-    assert runner.run(aws, service="ec2")[0] == []
+    assert runner.run(aws, service="cloudtrail")[0] == []
 
 
 def test_a_broken_check_is_reported_without_killing_the_scan(aws, planted, monkeypatch):
@@ -104,4 +135,4 @@ def test_demo_renders_the_terminal_report(aws, planted, capsys):
     out = capsys.readouterr().out
     print(out)
     assert "HIGH" in out and "S3.1" in out and INSECURE_BUCKET in out
-    assert "8 findings: 4 High, 2 Medium, 2 Low" in out
+    assert "11 findings: 6 High, 3 Medium, 2 Low" in out

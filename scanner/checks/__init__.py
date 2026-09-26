@@ -8,3 +8,4 @@ from .base import REGISTRY, check  # noqa: F401
 
 from . import s3  # noqa: F401,E402
 from . import iam  # noqa: F401,E402
+from . import ec2  # noqa: F401,E402
