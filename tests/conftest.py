@@ -5,8 +5,11 @@ import pytest
 from moto import mock_aws
 
 from scanner.aws_client import AWS
+from scanner.checks import ec2 as ec2_checks
 
 REGION = "us-east-1"
+# Sweeping moto's 38 regions costs ~4s per test; two prove the multi-region walk.
+TEST_REGIONS = [REGION, "eu-west-1"]
 
 
 @pytest.fixture
@@ -15,6 +18,7 @@ def aws(monkeypatch):
     for var in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
         monkeypatch.setenv(var, "testing")
     monkeypatch.setenv("AWS_DEFAULT_REGION", REGION)
+    monkeypatch.setattr(ec2_checks, "_regions", lambda aws: TEST_REGIONS)
     with mock_aws():
         yield AWS(region=REGION)
 
@@ -126,11 +130,12 @@ def fake_root_row(aws, monkeypatch, password_last_used="N/A", key_1="N/A", key_2
     monkeypatch.setattr(aws.iam, "get_credential_report", with_root)
 
 
-def make_security_group(aws, name, *rules):
+def make_security_group(aws, name, *rules, region=None):
     """Rules are (protocol, from_port, to_port, cidr). A cidr with ':' is IPv6."""
-    group_id = aws.ec2.create_security_group(GroupName=name, Description=name)["GroupId"]
+    ec2 = aws.client("ec2", region)
+    group_id = ec2.create_security_group(GroupName=name, Description=name)["GroupId"]
     if rules:
-        aws.ec2.authorize_security_group_ingress(
+        ec2.authorize_security_group_ingress(
             GroupId=group_id,
             IpPermissions=[
                 {

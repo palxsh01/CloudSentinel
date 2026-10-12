@@ -1,9 +1,12 @@
 from scanner.checks.s3 import (
+    _buckets,
     public_buckets,
     unencrypted_buckets,
     unlogged_buckets,
     unversioned_buckets,
 )
+import json
+
 from tests.conftest import make_bucket
 
 
@@ -113,3 +116,46 @@ def test_restrict_public_buckets_alone_neutralises_a_public_policy(aws):
     make_bucket(aws, "policy-restricted", public_policy=True)
     _partial_block(aws, "policy-restricted", RestrictPublicBuckets=True)
     assert findings(aws) == {}
+
+
+# --- S3.1 conditions and regions ---------------------------------------------
+
+
+def _conditional_policy(aws, bucket, condition):
+    make_bucket(aws, bucket)
+    aws.s3.put_bucket_policy(
+        Bucket=bucket,
+        Policy=json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject",
+                "Resource": f"arn:aws:s3:::{bucket}/*", "Condition": condition,
+            }],
+        }),
+    )
+
+
+def test_https_only_condition_is_still_public(aws):
+    _conditional_policy(aws, "https-anyone", {"Bool": {"aws:SecureTransport": "true"}})
+    assert set(findings(aws)) == {"https-anyone"}
+
+
+def test_org_restricted_policy_is_not_flagged(aws):
+    _conditional_policy(aws, "org-only", {"StringEquals": {"aws:PrincipalOrgID": "o-abc123"}})
+    assert findings(aws) == {}
+
+
+def test_negated_restriction_is_still_public(aws):
+    # "everyone except this VPC endpoint" is public.
+    _conditional_policy(aws, "all-but-vpce", {"StringNotEquals": {"aws:SourceVpce": "vpce-1"}})
+    assert set(findings(aws)) == {"all-but-vpce"}
+
+
+def test_bucket_in_another_region_is_read_through_its_region(aws):
+    eu = aws.client("s3", "eu-west-1")
+    eu.create_bucket(Bucket="eu-open", CreateBucketConfiguration={"LocationConstraint": "eu-west-1"})
+    eu.put_bucket_acl(Bucket="eu-open", ACL="public-read")
+    assert set(findings(aws)) == {"eu-open"}
+    # moto doesn't redirect cross-region calls the way real S3 does, so also
+    # prove the per-bucket client really targets the bucket's region.
+    assert {name: s3.meta.region_name for name, s3 in _buckets(aws)} == {"eu-open": "eu-west-1"}

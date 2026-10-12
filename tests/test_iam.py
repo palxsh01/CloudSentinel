@@ -123,3 +123,28 @@ def test_root_never_used_is_not_flagged(aws, monkeypatch):
 def test_recently_active_iam_user_is_not_mistaken_for_root(aws, monkeypatch):
     fake_root_row(aws, monkeypatch, password_last_used=_days_ago(1), user="daily-driver")
     assert dict(recent_root_usage(aws)) == {}
+
+
+def test_inline_admin_policies_are_flagged(aws):
+    doc = json.dumps({"Version": "2012-10-17", "Statement": [ADMIN]})
+    make_user(aws, "inline-user")
+    aws.iam.put_user_policy(UserName="inline-user", PolicyName="god", PolicyDocument=doc)
+    aws.iam.create_group(GroupName="ops")
+    aws.iam.put_group_policy(GroupName="ops", PolicyName="god", PolicyDocument=doc)
+    aws.iam.create_role(RoleName="deployer", AssumeRolePolicyDocument=json.dumps({"Version": "2012-10-17", "Statement": []}))
+    aws.iam.put_role_policy(RoleName="deployer", PolicyName="god", PolicyDocument=doc)
+    assert set(dict(wildcard_policies(aws))) == {
+        "user/inline-user (inline: god)",
+        "group/ops (inline: god)",
+        "role/deployer (inline: god)",
+    }
+
+
+def test_scoped_inline_policy_is_not_flagged(aws):
+    make_user(aws, "reader")
+    aws.iam.put_user_policy(
+        UserName="reader",
+        PolicyName="read",
+        PolicyDocument=json.dumps({"Version": "2012-10-17", "Statement": [{**ADMIN, "Action": "s3:GetObject"}]}),
+    )
+    assert dict(wildcard_policies(aws)) == {}

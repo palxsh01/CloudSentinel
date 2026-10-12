@@ -17,10 +17,11 @@ class AWS:
         self.session = boto3.Session(profile_name=profile, region_name=region)
         self._clients = {}
 
-    def client(self, name):
-        if name not in self._clients:
-            self._clients[name] = self.session.client(name)
-        return self._clients[name]
+    def client(self, name, region=None):
+        """A cached client; `region` overrides the session region (for regional resources)."""
+        if (name, region) not in self._clients:
+            self._clients[name, region] = self.session.client(name, region_name=region)
+        return self._clients[name, region]
 
     def __getattr__(self, name):
         # Only reached for attributes not found on the instance, so `session`

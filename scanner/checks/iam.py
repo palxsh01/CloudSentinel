@@ -59,20 +59,33 @@ def console_users_without_mfa(aws):
     "the principal needs.",
 )
 def wildcard_policies(aws):
-    # ponytail: customer-managed policies only. Inline user/group/role policies
-    # can also hold *:*; add list_*_policies + get_*_policy walks if needed.
     for policy in _paginate(aws, "list_policies", "Policies", Scope="Local"):
         document = aws.iam.get_policy_version(
             PolicyArn=policy["Arn"], VersionId=policy["DefaultVersionId"]
         )["PolicyVersion"]["Document"]
-        for stmt in _as_list(document.get("Statement", [])):
-            if (
-                stmt.get("Effect") == "Allow"
-                and "*" in _as_list(stmt.get("Action", []))
-                and "*" in _as_list(stmt.get("Resource", []))
-            ):
-                yield policy["Arn"], "allows Action '*' on Resource '*'"
-                break
+        if _grants_admin(document):
+            yield policy["Arn"], "allows Action '*' on Resource '*'"
+
+    # Inline policies live on the principal itself, not in list_policies.
+    for kind, key in (("user", "Users"), ("group", "Groups"), ("role", "Roles")):
+        Kind = kind.capitalize()
+        for principal in _paginate(aws, f"list_{kind}s", key):
+            name = principal[f"{Kind}Name"]
+            for policy_name in _paginate(aws, f"list_{kind}_policies", "PolicyNames", **{f"{Kind}Name": name}):
+                document = getattr(aws.iam, f"get_{kind}_policy")(
+                    **{f"{Kind}Name": name, "PolicyName": policy_name}
+                )["PolicyDocument"]
+                if _grants_admin(document):
+                    yield f"{kind}/{name} (inline: {policy_name})", "allows Action '*' on Resource '*'"
+
+
+def _grants_admin(document):
+    return any(
+        stmt.get("Effect") == "Allow"
+        and "*" in _as_list(stmt.get("Action", []))
+        and "*" in _as_list(stmt.get("Resource", []))
+        for stmt in _as_list(document.get("Statement", []))
+    )
 
 
 @check(

@@ -1,3 +1,4 @@
+from scanner.checks import ec2 as ec2_checks
 from scanner.checks.ec2 import open_admin_ports, open_db_ports, unencrypted_volumes
 from tests.conftest import make_security_group, make_volume
 
@@ -14,12 +15,12 @@ def flagged(check, aws):
 
 def test_ssh_open_to_world_is_flagged(aws):
     sg = make_security_group(aws, "ssh-world", ("tcp", 22, 22, ANYWHERE))
-    assert flagged(open_admin_ports, aws) == {sg: "open to the internet on 22 (SSH)"}
+    assert flagged(open_admin_ports, aws) == {sg: "us-east-1: open to the internet on 22 (SSH)"}
 
 
 def test_rdp_open_to_ipv6_world_is_flagged(aws):
     sg = make_security_group(aws, "rdp-v6", ("tcp", 3389, 3389, "::/0"))
-    assert flagged(open_admin_ports, aws) == {sg: "open to the internet on 3389 (RDP)"}
+    assert flagged(open_admin_ports, aws) == {sg: "us-east-1: open to the internet on 3389 (RDP)"}
 
 
 def test_port_range_covering_ssh_is_flagged(aws):
@@ -29,7 +30,7 @@ def test_port_range_covering_ssh_is_flagged(aws):
 
 def test_all_traffic_rule_is_flagged_for_every_port(aws):
     sg = make_security_group(aws, "allow-all", ("-1", -1, -1, ANYWHERE))
-    assert flagged(open_admin_ports, aws)[sg] == "open to the internet on 22 (SSH), 3389 (RDP)"
+    assert flagged(open_admin_ports, aws)[sg] == "us-east-1: open to the internet on 22 (SSH), 3389 (RDP)"
     assert "3306 (MySQL)" in flagged(open_db_ports, aws)[sg]
 
 
@@ -66,7 +67,7 @@ def test_each_db_port_open_to_world_is_flagged(aws):
 
 def test_db_port_findings_name_every_exposed_port(aws):
     sg = make_security_group(aws, "two-dbs", ("tcp", 5432, 5432, ANYWHERE), ("tcp", 6379, 6379, "::/0"))
-    assert flagged(open_db_ports, aws) == {sg: "open to the internet on 5432 (PostgreSQL), 6379 (Redis)"}
+    assert flagged(open_db_ports, aws) == {sg: "us-east-1: open to the internet on 5432 (PostgreSQL), 6379 (Redis)"}
 
 
 def test_db_port_from_private_range_is_not_flagged(aws):
@@ -86,9 +87,24 @@ def test_ssh_and_db_checks_do_not_overlap(aws):
 
 def test_unencrypted_volume_is_flagged(aws):
     volume = make_volume(aws)
-    assert dict(unencrypted_volumes(aws)) == {volume: "1 GiB volume, available, unencrypted"}
+    assert dict(unencrypted_volumes(aws)) == {volume: "us-east-1: 1 GiB volume, available, unencrypted"}
 
 
 def test_encrypted_volume_is_not_flagged(aws):
     make_volume(aws, encrypted=True)
     assert dict(unencrypted_volumes(aws)) == {}
+
+
+# --- every region -------------------------------------------------------------
+
+REAL_REGIONS = ec2_checks._regions  # captured before the fixture swaps it out
+
+
+def test_groups_in_other_regions_are_flagged(aws):
+    sg = make_security_group(aws, "far-away", ("tcp", 22, 22, ANYWHERE), region="eu-west-1")
+    assert flagged(open_admin_ports, aws) == {sg: "eu-west-1: open to the internet on 22 (SSH)"}
+
+
+def test_region_list_comes_from_the_account(aws):
+    regions = REAL_REGIONS(aws)
+    assert "us-east-1" in regions and "eu-west-1" in regions and len(regions) > 2

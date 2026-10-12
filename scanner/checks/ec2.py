@@ -14,9 +14,17 @@ WORLD = {"0.0.0.0/0", "::/0"}
 PORTED = {"tcp", "6", "udp", "17"}
 
 
-def _paginate(aws, operation, key, **kwargs):
-    for page in aws.ec2.get_paginator(operation).paginate(**kwargs):
-        yield from page[key]
+def _regions(aws):
+    """Every region enabled for the account (opted-out regions are excluded)."""
+    return [r["RegionName"] for r in aws.ec2.describe_regions()["Regions"]]
+
+
+def _paginate(aws, operation, key):
+    """(region, item) across every enabled region. EC2 resources are regional."""
+    for region in _regions(aws):
+        for page in aws.client("ec2", region).get_paginator(operation).paginate():
+            for item in page[key]:
+                yield region, item
 
 
 def _world_open_ports(rule, ports):
@@ -33,15 +41,13 @@ def _world_open_ports(rule, ports):
 
 
 def _exposed_groups(aws, ports):
-    # ponytail: session region only. Security groups are regional, so groups in
-    # other regions are not scanned. Loop over describe_regions() if needed.
-    for group in _paginate(aws, "describe_security_groups", "SecurityGroups"):
+    for region, group in _paginate(aws, "describe_security_groups", "SecurityGroups"):
         exposed = set()
         for rule in group["IpPermissions"]:
             exposed |= _world_open_ports(rule, ports)
         if exposed:
             names = ", ".join(f"{p} ({ports[p]})" for p in sorted(exposed))
-            yield f"{group['GroupId']} ({group['GroupName']})", f"open to the internet on {names}"
+            yield f"{group['GroupId']} ({group['GroupName']})", f"{region}: open to the internet on {names}"
 
 
 @check(
@@ -77,7 +83,6 @@ def open_db_ports(aws):
     "from it. Turn on EBS encryption by default for new volumes.",
 )
 def unencrypted_volumes(aws):
-    # ponytail: session region only, same as the security group checks.
-    for volume in _paginate(aws, "describe_volumes", "Volumes"):
+    for region, volume in _paginate(aws, "describe_volumes", "Volumes"):
         if not volume["Encrypted"]:
-            yield volume["VolumeId"], f"{volume['Size']} GiB volume, {volume['State']}, unencrypted"
+            yield volume["VolumeId"], f"{region}: {volume['Size']} GiB volume, {volume['State']}, unencrypted"
