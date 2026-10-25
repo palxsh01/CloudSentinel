@@ -40,7 +40,7 @@ The architecture deliberately keeps **checks** (produce data) and **reporters** 
 | CT.2 | CloudTrail | Trail not multi-region | Medium |
 | CT.3 | CloudTrail | Log file validation disabled | Low |
 
-*(See `docs/cis-mapping.md` for the corresponding CIS AWS Foundations Benchmark control numbers, where mapped.)*
+*(A mapping to CIS AWS Foundations Benchmark control numbers is on the roadmap.)*
 
 ## Tech Stack
 
@@ -56,30 +56,30 @@ The architecture deliberately keeps **checks** (produce data) and **reporters** 
 
 ### 1. Clone and install
 
-\`\`\`bash
+```bash
 git clone https://github.com/palxsh01/CloudSentinel.git
 cd CloudSentinel
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-\`\`\`
+```
 
 ### 2. Create a read-only IAM role
 
-Attach the policy in `iam/scanner-readonly-policy.json` to an IAM user or role. This grants only the `List*`/`Get*`/`Describe*` permissions CloudSentinel needs — it can never modify anything in your account.
+Attach the policy in `iam/scanner-readonly-policy.json` to an IAM user or role. It grants exactly the 30 read actions the checks call — `List*`/`Get*`/`Describe*`, plus `iam:GenerateCredentialReport`, which only builds a report of existing data (AWS's own `SecurityAudit` policy grants it). Nothing in it can modify your account. `tests/test_policy.py` records every AWS call a full scan makes and fails if the policy grants anything more or less.
 
 ### 3. Configure credentials
 
 Use any standard `boto3` credential source — environment variables, `~/.aws/credentials`, or an assumed role:
 
-\`\`\`bash
+```bash
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_DEFAULT_REGION=us-east-1
-\`\`\`
+```
 
 ## Usage
 
-\`\`\`bash
+```bash
 # Run a full scan, print to terminal
 python -m scanner.main scan
 
@@ -91,34 +91,59 @@ python -m scanner.main scan --output html --file report.html
 
 # Run only checks for a specific service
 python -m scanner.main scan --service s3
-\`\`\`
+
+# Use a named profile and session region
+python -m scanner.main scan --profile audit --region eu-west-1
+```
+
+| Option | Values | Default |
+|---|---|---|
+| `--service` | `s3`, `iam`, `ec2`, `cloudtrail` | all |
+| `--output` | `terminal`, `json`, `html` | `terminal` |
+| `--file` | path (needs `--output json` or `html`) | stdout |
+| `--profile`, `--region` | any boto3 profile / region | boto3 defaults |
+
+EC2 and CloudTrail checks sweep every enabled region regardless of `--region`; S3 reads each bucket in its own region.
+
+**Exit code:** `1` when any HIGH finding exists, `0` otherwise — so a CI step fails on high-severity issues. A check that cannot run (e.g. `AccessDenied`) is listed as a warning rather than silently skipped; in JSON/HTML mode it also goes to stderr and into the report's `errors`.
 
 ## Sample Output
 
-\`\`\`
-CloudSentinel Scan Report — account: 123456789012
-──────────────────────────────────────────────────────────
-[HIGH]   S3.1   my-public-bucket        Bucket allows public read access
-[HIGH]   IAM.1  jdoe                    Console user has no MFA enabled
-[MEDIUM] IAM.3  arn:aws:iam::...:key/1  Access key is 142 days old
-[LOW]    S3.3   my-data-bucket          Versioning is disabled
-──────────────────────────────────────────────────────────
-4 findings: 2 High, 1 Medium, 1 Low
-\`\`\`
+From the end-to-end test, against a `moto`-mocked account with every misconfiguration planted (`pytest -s -k demo`):
+
+```
+CloudSentinel scan report — account: 123456789012
+ Severity  Check  Resource                          Detail
+ HIGH      CT.1   account                           2 trail(s) exist but none is logging
+ HIGH      EC2.1  sg-357693cfcfce8771e (...-open)   us-east-1: open to the internet on 22 (SSH)
+ HIGH      EC2.2  sg-357693cfcfce8771e (...-open)   us-east-1: open to the internet on 3306 (MySQL)
+ HIGH      IAM.1  cloudsentinel-no-mfa              console password set, no MFA device
+ HIGH      IAM.2  arn:aws:iam::...:policy/...-admin allows Action '*' on Resource '*'
+ HIGH      IAM.4  <root_account>                    root used via console sign-in 2d ago
+ HIGH      S3.1   cloudsentinel-public-bucket       ACL grants READ to everyone
+ MEDIUM    CT.2   cloudsentinel-trail               records only us-east-1
+ MEDIUM    EC2.3  vol-31daffa1355161fae             us-east-1: 1 GiB volume, available, unencrypted
+ MEDIUM    IAM.3  AKIARZPUZDIKCQ5SBECM              cloudsentinel-no-mfa's key is 91 days old
+ MEDIUM    S3.2   cloudsentinel-public-bucket       no default encryption configured
+ LOW       CT.3   cloudsentinel-trail               log file validation is off
+ LOW       S3.3   cloudsentinel-public-bucket       versioning is never enabled
+ LOW       S3.4   cloudsentinel-public-bucket       server access logging is off
+14 findings: 7 High, 4 Medium, 3 Low
+```
 
 ## Testing
 
 All checks are unit-tested against **mocked** AWS responses using `moto`, so tests run without real credentials or any risk of touching a live account:
 
-\`\`\`bash
+```bash
 pytest tests/
-\`\`\`
+```
 
 ## Validating Against a Vulnerable Sandbox
 
 Detection accuracy is verified two ways. Every check is unit-tested against `moto`-mocked AWS (above). Beyond that, CloudSentinel is validated against a deliberately misconfigured AWS sandbox account — an open S3 bucket, an over-permissive security group, an MFA-less IAM user and friends — to confirm every planted issue is flagged, with no false negatives on the known set.
 
-> **Status:** the sandbox validation run is pending an AWS account (tracked in `backlog.md`). The `moto` suite is the current correctness gate.
+> **Status (2026-10-22):** validated on a real account, scanning as a role holding only `iam/scanner-readonly-policy.json`. Every planted issue was flagged (12/12 findings across S3.1, S3.3, S3.4, IAM.1, IAM.2, EC2.1–EC2.3, CT.1–CT.3), with no unexpected findings and no `AccessDenied` errors; a us-west-2 bucket was read correctly from an ap-south-1 session. IAM.4 fired on a genuine root sign-in. IAM.3 (90-day-old key) and S3.2 (AWS encrypts new buckets by default since 2023) can't be planted on a fresh resource, so those two rely on the `moto` suite.
 
 ## Roadmap
 

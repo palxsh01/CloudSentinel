@@ -156,3 +156,18 @@ def make_security_group(aws, name, *rules, region=None):
 
 def make_volume(aws, encrypted=False):
     return aws.ec2.create_volume(Size=1, AvailabilityZone=f"{REGION}a", Encrypted=encrypted)["VolumeId"]
+
+
+def make_trail(aws, name, region=REGION, multi_region=False, validation=False, logging=True, bucket=None):
+    """A trail delivering to `bucket`, or to a new bucket of its own (CloudTrail needs one)."""
+    if bucket is None:
+        bucket = f"{name}-logs"
+        extra = {} if region == "us-east-1" else {"CreateBucketConfiguration": {"LocationConstraint": region}}
+        aws.client("s3", region).create_bucket(Bucket=bucket, **extra)
+    ct = aws.client("cloudtrail", region)
+    ct.create_trail(
+        Name=name, S3BucketName=bucket, IsMultiRegionTrail=multi_region, EnableLogFileValidation=validation
+    )
+    if logging:
+        ct.start_logging(Name=name)
+    return name

@@ -19,6 +19,7 @@ from tests.conftest import (
     make_bucket,
     make_policy,
     make_security_group,
+    make_trail,
     make_user,
     make_volume,
 )
@@ -27,6 +28,7 @@ IMPLEMENTED = {
     *("S3.1", "S3.2", "S3.3", "S3.4"),
     *("IAM.1", "IAM.2", "IAM.3", "IAM.4"),
     *("EC2.1", "EC2.2", "EC2.3"),
+    *("CT.1", "CT.2", "CT.3"),
 }
 
 
@@ -74,6 +76,14 @@ def planted(aws, monkeypatch):
     plain_volume = make_volume(aws)
     make_volume(aws, encrypted=True)
 
+    # CT.1-CT.3: a stopped, single-region, unvalidated trail. The twin is
+    # multi-region and validated but also stopped, so CT.1 still fires (it is
+    # account-level) while CT.2/CT.3 must stay quiet on it. Both deliver to the
+    # hardened bucket so no extra, unhardened bucket is planted.
+    make_trail(aws, "cloudsentinel-trail", logging=False, bucket=HARDENED_BUCKET)
+    make_trail(aws, "cloudsentinel-hardened-trail", multi_region=True, validation=True, logging=False,
+               bucket=HARDENED_BUCKET)
+
     return {
         INSECURE_BUCKET,
         INSECURE_USER,
@@ -82,6 +92,8 @@ def planted(aws, monkeypatch):
         "<root_account>",
         f"{open_group} (cloudsentinel-open)",
         plain_volume,
+        "account",
+        "cloudsentinel-trail",
     }
 
 
@@ -107,10 +119,9 @@ def test_findings_sort_highest_severity_first(aws, planted):
 
 
 def test_service_filter_runs_only_that_service(aws, planted):
-    for service in ("s3", "iam", "ec2"):
+    for service in ("s3", "iam", "ec2", "cloudtrail"):
         findings, _ = runner.run(aws, service=service)
         assert findings and {f.service for f in findings} == {service}
-    assert runner.run(aws, service="cloudtrail")[0] == []
 
 
 def test_a_broken_check_is_reported_without_killing_the_scan(aws, planted, monkeypatch):
@@ -135,4 +146,4 @@ def test_demo_renders_the_terminal_report(aws, planted, capsys):
     out = capsys.readouterr().out
     print(out)
     assert "HIGH" in out and "S3.1" in out and INSECURE_BUCKET in out
-    assert "11 findings: 6 High, 3 Medium, 2 Low" in out
+    assert "14 findings: 7 High, 4 Medium, 3 Low" in out

@@ -1,0 +1,42 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudSentinelReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketAcl",
+        "s3:GetBucketPolicy",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetBucketVersioning",
+        "s3:GetBucketLogging",
+        "iam:ListUsers",
+        "iam:GetLoginProfile",
+        "iam:ListMFADevices",
+        "iam:ListAccessKeys",
+        "iam:ListPolicies",
+        "iam:GetPolicyVersion",
+        "iam:ListGroups",
+        "iam:ListRoles",
+        "iam:ListUserPolicies",
+        "iam:ListGroupPolicies",
+        "iam:ListRolePolicies",
+        "iam:GetUserPolicy",
+        "iam:GetGroupPolicy",
+        "iam:GetRolePolicy",
+        "iam:GenerateCredentialReport",
+        "iam:GetCredentialReport",
+        "ec2:DescribeRegions",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeVolumes",
+        "cloudtrail:ListTrails",
+        "cloudtrail:GetTrail",
+        "cloudtrail:GetTrailStatus"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

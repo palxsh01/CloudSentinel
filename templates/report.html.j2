@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudSentinel report — {{ account }}</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 70rem; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; margin-bottom: .25rem; }
+  .meta { color: #555; margin-top: 0; }
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+  th, td { border-bottom: 1px solid #ddd; padding: .5rem; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; }
+  td.resource { word-break: break-all; font-family: ui-monospace, monospace; font-size: .9em; }
+  .sev { font-weight: 600; padding: .1rem .45rem; border-radius: .25rem; color: #fff; }
+  .HIGH { background: #b42318; } .MEDIUM { background: #b54708; } .LOW { background: #175cd3; }
+  .fix { color: #444; font-size: .9em; }
+  .errors { background: #fffaeb; border: 1px solid #fedf89; padding: .75rem 1rem; margin-top: 1.5rem; }
+</style>
+</head>
+<body>
+<h1>CloudSentinel scan report</h1>
+<p class="meta">Account {{ account }} · generated {{ generated_at }}</p>
+
+{% if findings %}
+<p><strong>{{ findings|length }} finding{{ "" if findings|length == 1 else "s" }}:</strong>
+{% for sev, n in summary.items() if n %}{{ n }} {{ sev|title }}{{ ", " if not loop.last }}{% endfor %}</p>
+<table>
+  <thead><tr><th>Severity</th><th>Check</th><th>Resource</th><th>Detail</th></tr></thead>
+  <tbody>
+  {% for f in findings %}
+    <tr>
+      <td><span class="sev {{ f.severity }}">{{ f.severity }}</span></td>
+      <td>{{ f.check_id }}<br><span class="fix">{{ f.title }}</span></td>
+      <td class="resource">{{ f.resource }}</td>
+      <td>{{ f.detail }}<br><span class="fix">Fix: {{ f.remediation }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No findings.</p>
+{% endif %}
+
+{% if errors %}
+<div class="errors">
+  <strong>Checks that could not run</strong>
+  <ul>{% for e in errors %}<li>{{ e.check_id }}: {{ e.message }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+</body>
+</html>
