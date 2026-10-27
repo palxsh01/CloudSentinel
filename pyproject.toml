@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloudsentinel"
+version = "1.0.0"
+description = "Read-only AWS security misconfiguration scanner"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+# moto runs `cs scan --demo`; it is only imported for demo scans.
+dependencies = ["boto3[crt]>=1.34", "click>=8.1", "rich>=13.7", "Jinja2>=3.1", "moto[s3,iam,ec2,cloudtrail]>=5.0"]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+cloudsentinel = "scanner.main:cli"
+cs = "scanner.main:cli"
+
+[tool.setuptools.packages.find]
+include = ["scanner*"]
+
+[tool.setuptools.package-data]
+scanner = ["templates/*.j2"]

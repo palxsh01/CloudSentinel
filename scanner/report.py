@@ -12,7 +12,7 @@ from rich.table import Table
 from .models import Severity
 
 COLOURS = {Severity.HIGH: "bold red", Severity.MEDIUM: "yellow", Severity.LOW: "cyan"}
-TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
+TEMPLATES = Path(__file__).resolve().parent / "templates"
 
 
 def _counts(findings):

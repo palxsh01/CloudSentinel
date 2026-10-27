@@ -1,0 +1,138 @@
+{
+  "account": "123456789012",
+  "generated_at": "2026-10-27T04:48:52+00:00",
+  "summary": {
+    "HIGH": 7,
+    "MEDIUM": 4,
+    "LOW": 3
+  },
+  "findings": [
+    {
+      "check_id": "CT.1",
+      "service": "cloudtrail",
+      "severity": "HIGH",
+      "title": "No CloudTrail trail is logging",
+      "resource": "account",
+      "detail": "1 trail(s) exist but none is logging",
+      "remediation": "Create a multi-region trail with log file validation, and make sure logging is started."
+    },
+    {
+      "check_id": "EC2.1",
+      "service": "ec2",
+      "severity": "HIGH",
+      "title": "SSH/RDP open to the internet",
+      "resource": "sg-0d3edb8cfceddec8e (cloudsentinel-open)",
+      "detail": "us-east-1: open to the internet on 22 (SSH)",
+      "remediation": "Restrict the rule to known IP ranges, or remove it and use SSM Session Manager or a bastion host instead."
+    },
+    {
+      "check_id": "EC2.2",
+      "service": "ec2",
+      "severity": "HIGH",
+      "title": "Database port open to the internet",
+      "resource": "sg-0d3edb8cfceddec8e (cloudsentinel-open)",
+      "detail": "us-east-1: open to the internet on 3306 (MySQL)",
+      "remediation": "Remove the internet-facing rule; allow the database port only from the application's security group."
+    },
+    {
+      "check_id": "IAM.1",
+      "service": "iam",
+      "severity": "HIGH",
+      "title": "Console user without MFA",
+      "resource": "cloudsentinel-no-mfa",
+      "detail": "console password set, no MFA device",
+      "remediation": "Enable an MFA device for the user, or remove their console password if they only need programmatic access."
+    },
+    {
+      "check_id": "IAM.2",
+      "service": "iam",
+      "severity": "HIGH",
+      "title": "Policy grants full admin (*:*)",
+      "resource": "arn:aws:iam::123456789012:policy/cloudsentinel-admin",
+      "detail": "allows Action '*' on Resource '*'",
+      "remediation": "Replace the wildcard statement with the specific actions and resources the principal needs."
+    },
+    {
+      "check_id": "IAM.4",
+      "service": "iam",
+      "severity": "HIGH",
+      "title": "Root account used recently",
+      "resource": "<root_account>",
+      "detail": "root used via console sign-in 2d ago",
+      "remediation": "Stop using the root account for daily work: create an admin IAM user or role, delete root access keys, and enable root MFA."
+    },
+    {
+      "check_id": "S3.1",
+      "service": "s3",
+      "severity": "HIGH",
+      "title": "Bucket allows public access",
+      "resource": "cloudsentinel-public-bucket",
+      "detail": "ACL grants READ to everyone",
+      "remediation": "Enable Block Public Access on the bucket, remove AllUsers/AuthenticatedUsers ACL grants, and scope the bucket policy to specific principals."
+    },
+    {
+      "check_id": "CT.2",
+      "service": "cloudtrail",
+      "severity": "MEDIUM",
+      "title": "Trail is not multi-region",
+      "resource": "cloudsentinel-trail",
+      "detail": "records only us-east-1",
+      "remediation": "Turn on IsMultiRegionTrail so activity in every region is recorded."
+    },
+    {
+      "check_id": "EC2.3",
+      "service": "ec2",
+      "severity": "MEDIUM",
+      "title": "EBS volume not encrypted",
+      "resource": "vol-0c7310c4bc1daaf36",
+      "detail": "us-east-1: 1 GiB volume, available, unencrypted",
+      "remediation": "Snapshot the volume, copy the snapshot with encryption on, and restore from it. Turn on EBS encryption by default for new volumes."
+    },
+    {
+      "check_id": "IAM.3",
+      "service": "iam",
+      "severity": "MEDIUM",
+      "title": "Access key older than 90 days",
+      "resource": "AKIARZPUZDIKCMPPRVBW",
+      "detail": "cloudsentinel-no-mfa's key is 91 days old",
+      "remediation": "Create a new access key, move workloads to it, then deactivate and delete the old one."
+    },
+    {
+      "check_id": "S3.2",
+      "service": "s3",
+      "severity": "MEDIUM",
+      "title": "Default encryption not enabled",
+      "resource": "cloudsentinel-public-bucket",
+      "detail": "no default encryption configured",
+      "remediation": "Enable default server-side encryption (SSE-S3 or SSE-KMS) on the bucket."
+    },
+    {
+      "check_id": "CT.3",
+      "service": "cloudtrail",
+      "severity": "LOW",
+      "title": "Log file validation disabled",
+      "resource": "cloudsentinel-trail",
+      "detail": "log file validation is off",
+      "remediation": "Enable log file validation so tampering with delivered logs can be detected."
+    },
+    {
+      "check_id": "S3.3",
+      "service": "s3",
+      "severity": "LOW",
+      "title": "Versioning disabled",
+      "resource": "cloudsentinel-public-bucket",
+      "detail": "versioning is never enabled",
+      "remediation": "Enable versioning so overwritten or deleted objects can be recovered."
+    },
+    {
+      "check_id": "S3.4",
+      "service": "s3",
+      "severity": "LOW",
+      "title": "Access logging disabled",
+      "resource": "cloudsentinel-public-bucket",
+      "detail": "server access logging is off",
+      "remediation": "Enable server access logging to a separate, dedicated log bucket."
+    }
+  ],
+  "errors": []
+}

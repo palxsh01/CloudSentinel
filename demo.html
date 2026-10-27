@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudSentinel report — 123456789012</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 70rem; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; margin-bottom: .25rem; }
+  .meta { color: #555; margin-top: 0; }
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+  th, td { border-bottom: 1px solid #ddd; padding: .5rem; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; }
+  td.resource { word-break: break-all; font-family: ui-monospace, monospace; font-size: .9em; }
+  .sev { font-weight: 600; padding: .1rem .45rem; border-radius: .25rem; color: #fff; }
+  .HIGH { background: #b42318; } .MEDIUM { background: #b54708; } .LOW { background: #175cd3; }
+  .fix { color: #444; font-size: .9em; }
+  .errors { background: #fffaeb; border: 1px solid #fedf89; padding: .75rem 1rem; margin-top: 1.5rem; }
+</style>
+</head>
+<body>
+<h1>CloudSentinel scan report</h1>
+<p class="meta">Account 123456789012 · generated 2026-10-27T04:49:10+00:00</p>
+
+
+<p><strong>14 findings:</strong>
+7 High, 4 Medium, 3 Low</p>
+<table>
+  <thead><tr><th>Severity</th><th>Check</th><th>Resource</th><th>Detail</th></tr></thead>
+  <tbody>
+  
+    <tr>
+      <td><span class="sev HIGH">HIGH</span></td>
+      <td>CT.1<br><span class="fix">No CloudTrail trail is logging</span></td>
+      <td class="resource">account</td>
+      <td>1 trail(s) exist but none is logging<br><span class="fix">Fix: Create a multi-region trail with log file validation, and make sure logging is started.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev HIGH">HIGH</span></td>
+      <td>EC2.1<br><span class="fix">SSH/RDP open to the internet</span></td>
+      <td class="resource">sg-ee5edbaedb10ae2a9 (cloudsentinel-open)</td>
+      <td>us-east-1: open to the internet on 22 (SSH)<br><span class="fix">Fix: Restrict the rule to known IP ranges, or remove it and use SSM Session Manager or a bastion host instead.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev HIGH">HIGH</span></td>
+      <td>EC2.2<br><span class="fix">Database port open to the internet</span></td>
+      <td class="resource">sg-ee5edbaedb10ae2a9 (cloudsentinel-open)</td>
+      <td>us-east-1: open to the internet on 3306 (MySQL)<br><span class="fix">Fix: Remove the internet-facing rule; allow the database port only from the application&#39;s security group.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev HIGH">HIGH</span></td>
+      <td>IAM.1<br><span class="fix">Console user without MFA</span></td>
+      <td class="resource">cloudsentinel-no-mfa</td>
+      <td>console password set, no MFA device<br><span class="fix">Fix: Enable an MFA device for the user, or remove their console password if they only need programmatic access.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev HIGH">HIGH</span></td>
+      <td>IAM.2<br><span class="fix">Policy grants full admin (*:*)</span></td>
+      <td class="resource">arn:aws:iam::123456789012:policy/cloudsentinel-admin</td>
+      <td>allows Action &#39;*&#39; on Resource &#39;*&#39;<br><span class="fix">Fix: Replace the wildcard statement with the specific actions and resources the principal needs.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev HIGH">HIGH</span></td>
+      <td>IAM.4<br><span class="fix">Root account used recently</span></td>
+      <td class="resource">&lt;root_account&gt;</td>
+      <td>root used via console sign-in 2d ago<br><span class="fix">Fix: Stop using the root account for daily work: create an admin IAM user or role, delete root access keys, and enable root MFA.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev HIGH">HIGH</span></td>
+      <td>S3.1<br><span class="fix">Bucket allows public access</span></td>
+      <td class="resource">cloudsentinel-public-bucket</td>
+      <td>ACL grants READ to everyone<br><span class="fix">Fix: Enable Block Public Access on the bucket, remove AllUsers/AuthenticatedUsers ACL grants, and scope the bucket policy to specific principals.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev MEDIUM">MEDIUM</span></td>
+      <td>CT.2<br><span class="fix">Trail is not multi-region</span></td>
+      <td class="resource">cloudsentinel-trail</td>
+      <td>records only us-east-1<br><span class="fix">Fix: Turn on IsMultiRegionTrail so activity in every region is recorded.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev MEDIUM">MEDIUM</span></td>
+      <td>EC2.3<br><span class="fix">EBS volume not encrypted</span></td>
+      <td class="resource">vol-ddc91a09d12034837</td>
+      <td>us-east-1: 1 GiB volume, available, unencrypted<br><span class="fix">Fix: Snapshot the volume, copy the snapshot with encryption on, and restore from it. Turn on EBS encryption by default for new volumes.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev MEDIUM">MEDIUM</span></td>
+      <td>IAM.3<br><span class="fix">Access key older than 90 days</span></td>
+      <td class="resource">AKIARZPUZDIKH5ZVS2XT</td>
+      <td>cloudsentinel-no-mfa&#39;s key is 91 days old<br><span class="fix">Fix: Create a new access key, move workloads to it, then deactivate and delete the old one.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev MEDIUM">MEDIUM</span></td>
+      <td>S3.2<br><span class="fix">Default encryption not enabled</span></td>
+      <td class="resource">cloudsentinel-public-bucket</td>
+      <td>no default encryption configured<br><span class="fix">Fix: Enable default server-side encryption (SSE-S3 or SSE-KMS) on the bucket.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev LOW">LOW</span></td>
+      <td>CT.3<br><span class="fix">Log file validation disabled</span></td>
+      <td class="resource">cloudsentinel-trail</td>
+      <td>log file validation is off<br><span class="fix">Fix: Enable log file validation so tampering with delivered logs can be detected.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev LOW">LOW</span></td>
+      <td>S3.3<br><span class="fix">Versioning disabled</span></td>
+      <td class="resource">cloudsentinel-public-bucket</td>
+      <td>versioning is never enabled<br><span class="fix">Fix: Enable versioning so overwritten or deleted objects can be recovered.</span></td>
+    </tr>
+  
+    <tr>
+      <td><span class="sev LOW">LOW</span></td>
+      <td>S3.4<br><span class="fix">Access logging disabled</span></td>
+      <td class="resource">cloudsentinel-public-bucket</td>
+      <td>server access logging is off<br><span class="fix">Fix: Enable server access logging to a separate, dedicated log bucket.</span></td>
+    </tr>
+  
+  </tbody>
+</table>
+
+
+
+</body>
+</html>

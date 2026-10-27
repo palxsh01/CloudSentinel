@@ -76,3 +76,51 @@ def test_html_escapes_resource_names():
     hostile = Finding("S3.1", "s3", Severity.HIGH, "t", "<script>alert(1)</script>", "d", "r")
     html = report.as_html([hostile], account_id=ACCOUNT)
     assert "<script>alert" not in html and "&lt;script&gt;" in html
+
+
+def test_no_login_is_a_clean_error(monkeypatch, tmp_path):
+    for var in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(tmp_path / "none"))
+    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(tmp_path / "none"))
+    monkeypatch.setenv("AWS_EC2_METADATA_DISABLED", "true")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+
+    result = scan()
+    assert result.exit_code == 2
+    assert "no AWS account is logged in" in result.stderr
+    assert "Traceback" not in result.output
+
+
+def test_help_lists_every_scan_option_and_both_ways_to_run():
+    out = CliRunner().invoke(cli, ["help"]).output
+    for text in ("--service", "--profile", "--region", "--output", "--file", "cs scan --demo", "aws login"):
+        assert text in out
+
+
+def demo(*args):
+    return CliRunner().invoke(cli, ["scan", "--demo", *args])
+
+
+def test_demo_finds_all_14_without_any_aws_login(monkeypatch):
+    for var in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE"):
+        monkeypatch.delenv(var, raising=False)
+    result = demo()
+    assert result.exit_code == 1
+    assert "14 findings: 7 High, 4 Medium, 3 Low" in result.stdout
+    assert "Demo:" in result.stderr
+
+
+def test_demo_honours_service_output_and_file(tmp_path):
+    doc = json.loads(demo("--service", "iam", "--output", "json").stdout)
+    assert {f["check_id"] for f in doc["findings"]} == {"IAM.1", "IAM.2", "IAM.3", "IAM.4"}
+    assert doc["errors"] == []
+
+    out = tmp_path / "demo.html"
+    result = demo("--service", "cloudtrail", "--output", "html", "--file", str(out))
+    assert result.stdout == "" and "CT.1" in out.read_text() and "S3.1" not in out.read_text()
+
+
+def test_demo_rejects_profile_and_region():
+    result = demo("--profile", "audit")
+    assert result.exit_code == 2 and "--demo can't be combined" in result.stderr

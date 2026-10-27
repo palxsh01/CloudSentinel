@@ -60,8 +60,11 @@ The architecture deliberately keeps **checks** (produce data) and **reporters** 
 git clone https://github.com/palxsh01/CloudSentinel.git
 cd CloudSentinel
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install .            # installs the `cloudsentinel` and `cs` commands
 ```
+
+For development, `pip install -e ".[test]"` installs in editable mode with pytest.
+`pip install git+https://github.com/palxsh01/CloudSentinel.git` installs it without cloning.
 
 ### 2. Create a read-only IAM role
 
@@ -80,20 +83,26 @@ export AWS_DEFAULT_REGION=us-east-1
 ## Usage
 
 ```bash
-# Run a full scan, print to terminal
-python -m scanner.main scan
+# Every command, option, exit code and check, plus real vs demo scans
+cs help
+
+# Run a full scan, print to terminal (`cs` is short for `cloudsentinel`)
+cs scan
 
 # Export findings as JSON
-python -m scanner.main scan --output json --file findings.json
+cs scan --output json --file findings.json
 
 # Generate an HTML report
-python -m scanner.main scan --output html --file report.html
+cs scan --output html --file report.html
 
 # Run only checks for a specific service
-python -m scanner.main scan --service s3
+cs scan --service s3
 
 # Use a named profile and session region
-python -m scanner.main scan --profile audit --region eu-west-1
+cloudsentinel scan --profile audit --region eu-west-1
+
+# Demo: mocked account with every issue planted, no AWS login needed
+cs scan --demo
 ```
 
 | Option | Values | Default |
@@ -102,14 +111,15 @@ python -m scanner.main scan --profile audit --region eu-west-1
 | `--output` | `terminal`, `json`, `html` | `terminal` |
 | `--file` | path (needs `--output json` or `html`) | stdout |
 | `--profile`, `--region` | any boto3 profile / region | boto3 defaults |
+| `--demo` | flag; scans a mocked account (can't combine with `--profile`/`--region`) | off |
 
 EC2 and CloudTrail checks sweep every enabled region regardless of `--region`; S3 reads each bucket in its own region.
 
-**Exit code:** `1` when any HIGH finding exists, `0` otherwise — so a CI step fails on high-severity issues. A check that cannot run (e.g. `AccessDenied`) is listed as a warning rather than silently skipped; in JSON/HTML mode it also goes to stderr and into the report's `errors`.
+**Exit code:** `1` when any HIGH finding exists, `0` otherwise — so a CI step fails on high-severity issues. `2` when no AWS login is found (or it has expired); the scan doesn't start and a one-line error says to log in. A check that cannot run (e.g. `AccessDenied`) is listed as a warning rather than silently skipped; in JSON/HTML mode it also goes to stderr and into the report's `errors`.
 
 ## Sample Output
 
-From the end-to-end test, against a `moto`-mocked account with every misconfiguration planted (`pytest -s -k demo`):
+From `cs scan --demo`, which runs the real scan against a `moto`-mocked account with one issue planted per check — no AWS login or cost. `--service`, `--output` and `--file` work with it as usual:
 
 ```
 CloudSentinel scan report — account: 123456789012
